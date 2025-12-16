@@ -1,0 +1,7 @@
+flask>=2.3.0
+flask-cors>=4.0.0
+networkx>=3.0
+numpy>=1.24.0
+qiskit>=0.44.0
+plotly>=5.14.0
+waitress>=2.1.0
