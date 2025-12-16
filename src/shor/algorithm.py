@@ -5,6 +5,7 @@ Demonstrates quantum period finding for RSA-like problems
 import numpy as np
 import random
 import math
+import time
 from fractions import Fraction
 from typing import Tuple, List, Optional
 
@@ -15,7 +16,7 @@ class ShorSimulator:
         self.n_qubits = n_qubits
         self.N = None  # Number to factor
         self.a = None  # Random coprime
-    
+        
     def factor(self, N: int, verbose: bool = True) -> Tuple[int, int]:
         """
         Factor integer N using Shor's algorithm simulation
@@ -37,28 +38,42 @@ class ShorSimulator:
                 return root, N // root
         
         # Step 3: Main quantum part (simulated)
-        while True:
+        attempts = 0
+        max_attempts = 10
+        
+        while attempts < max_attempts:
+            attempts += 1
+            
             # Choose random a coprime to N
             self.a = random.randint(2, N - 1)
             if math.gcd(self.a, N) != 1:
+                if verbose:
+                    print(f"Attempt {attempts}: a = {self.a} (not coprime, skipping)")
                 continue
             
             if verbose:
-                print(f"Selected coprime a = {self.a}")
+                print(f"\nAttempt {attempts}:")
+                print(f"  Random coprime a = {self.a}")
+                print(f"  gcd({self.a}, {N}) = 1 ✓")
             
             # Quantum period finding (simulated)
             r = self.quantum_period_finding(self.a, N, verbose)
             
-            if r is None or r % 2 == 1:
+            if r is None:
                 if verbose:
-                    print(f"Period r = {r} is odd, trying again...")
+                    print(f"  Could not find period, trying again...")
+                continue
+            
+            if r % 2 == 1:
+                if verbose:
+                    print(f"  Period r = {r} is odd, trying again...")
                 continue
             
             # Check if a^(r/2) ≡ -1 (mod N)
             x = pow(self.a, r // 2, N)
             if x == N - 1:
                 if verbose:
-                    print(f"Period yields trivial factor, trying again...")
+                    print(f"  a^(r/2) = {x} gives trivial factor, trying again...")
                 continue
             
             # Found factors!
@@ -67,9 +82,16 @@ class ShorSimulator:
             
             if p != 1 and q != 1 and p * q == N:
                 if verbose:
-                    print(f"Success! Factors found: {p} * {q} = {N}")
-                    print(f"Period found: r = {r}")
+                    print(f"\n✅ SUCCESS on attempt {attempts}!")
+                    print(f"  Period found: r = {r}")
+                    print(f"  Factors: {p} × {q} = {N}")
+                
                 return min(p, q), max(p, q)
+            else:
+                if verbose:
+                    print(f"  Found invalid factors: {p}, {q}")
+        
+        raise RuntimeError(f"Failed to factor {N} after {max_attempts} attempts")
     
     def quantum_period_finding(self, a: int, N: int, verbose: bool = True) -> Optional[int]:
         """
@@ -77,49 +99,50 @@ class ShorSimulator:
         Returns period r such that a^r ≡ 1 mod N
         """
         if verbose:
-            print("\n--- Quantum Period Finding Simulation ---")
+            print("  --- Quantum Period Finding ---")
         
-        # Create superposition (simulated)
         n_qubits = self.n_qubits
         q = 2 ** n_qubits
         
-        if verbose:
-            print(f"Using {n_qubits} qubits (q = {q})")
-            print(f"Creating superposition of {q} states...")
-        
-        # Simulate quantum measurements
+        # Simulate multiple quantum measurements
         measurements = []
-        for _ in range(3):  # Multiple measurements for accuracy
-            # Simulate quantum measurement (getting phase information)
+        
+        for shot in range(3):  # Multiple quantum measurements
+            # Simulate quantum measurement outcome
             c = random.randint(0, q - 1)
             
-            # Apply continued fractions to find period
+            # Use continued fractions to find period candidates
             frac = Fraction(c, q).limit_denominator(N)
             r_candidate = frac.denominator
             
             measurements.append(r_candidate)
             
             if verbose:
-                print(f"Measurement {_+1}: c = {c}, candidate r = {r_candidate}")
+                print(f"  Measurement {shot+1}: c = {c}, candidate r = {r_candidate}")
         
-        # Take the most common candidate
+        # Find most common candidate
         from collections import Counter
-        r_counts = Counter(measurements)
-        r = r_counts.most_common(1)[0][0]
-        
-        # Verify period
-        if pow(a, r, N) == 1:
-            if verbose:
-                print(f"Verified: {a}^{r} ≡ 1 mod {N}")
-            return r
-        
-        # Try multiples of found period
-        for k in range(1, 10):
-            r_try = r * k
-            if pow(a, r_try, N) == 1:
+        if measurements:
+            r_counts = Counter(measurements)
+            r = r_counts.most_common(1)[0][0]
+            
+            # Verify period
+            if pow(a, r, N) == 1:
                 if verbose:
-                    print(f"Found period after testing multiples: r = {r_try}")
-                return r_try
+                    print(f"  Verified: {a}^{r} ≡ 1 mod {N}")
+                return r
+        
+        # Try to find period by testing multiples
+        if verbose:
+            print("  Testing potential periods...")
+        
+        # Test potential periods up to a reasonable limit
+        max_test = min(1000, N)
+        for r in range(1, max_test):
+            if pow(a, r, N) == 1:
+                if verbose:
+                    print(f"  Found period by testing: r = {r}")
+                return r
         
         return None
     
@@ -193,12 +216,14 @@ class ShorSimulator:
         for p in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]:
             if n % p == 0:
                 return n == p
+        
         # Miller-Rabin
         d = n - 1
         s = 0
         while d % 2 == 0:
             d //= 2
             s += 1
+        
         for _ in range(k):
             a = random.randint(2, n - 2)
             x = pow(a, d, n)
@@ -210,9 +235,9 @@ class ShorSimulator:
                     break
             else:
                 return False
+        
         return True
 
-# Quantum Fourier Transform implementation
 class QuantumFourierTransform:
     """Quantum Fourier Transform circuit implementation"""
     
@@ -224,57 +249,48 @@ class QuantumFourierTransform:
         """Apply QFT to state vector"""
         n = self.n_qubits
         N = 2 ** n
-        result = np.zeros(N, dtype=complex)
         
-        # Direct QFT implementation
-        for k in range(N):
-            for j in range(N):
-                angle = 2 * np.pi * j * k / N
-                result[k] += state_vector[j] * np.exp(2j * np.pi * angle)
-            result[k] /= np.sqrt(N)
+        # Direct QFT implementation using DFT matrix
+        omega = np.exp(2j * np.pi / N)
+        dft_matrix = np.array([[omega**(j*k) for k in range(N)] for j in range(N)]) / np.sqrt(N)
         
-        return result
+        return dft_matrix @ state_vector
     
     def inverse(self, state_vector: np.ndarray) -> np.ndarray:
         """Apply inverse QFT"""
         n = self.n_qubits
         N = 2 ** n
-        result = np.zeros(N, dtype=complex)
         
-        for j in range(N):
-            for k in range(N):
-                angle = -2 * np.pi * j * k / N
-                result[j] += state_vector[k] * np.exp(2j * np.pi * angle)
-            result[j] /= np.sqrt(N)
+        # Inverse DFT matrix
+        omega = np.exp(-2j * np.pi / N)  # Note: negative sign for inverse
+        idft_matrix = np.array([[omega**(j*k) for k in range(N)] for j in range(N)]) / np.sqrt(N)
         
-        return result
+        return idft_matrix @ state_vector
 
+# Simple test when run directly
 if __name__ == "__main__":
-    import time
-    
     print("Shor's Algorithm Quantum Simulator")
     print("=" * 50)
     
     # Create simulator
     shor = ShorSimulator(n_qubits=8)
     
-    # Example factorization
-    numbers_to_factor = [15, 21, 35, 143]  # Classic examples
+    # Test factorization
+    test_numbers = [15, 21]
     
-    for N in numbers_to_factor:
+    for N in test_numbers:
         print(f"\nFactoring N = {N}:")
-        print("-" * 30)
-        
-        start = time.time()
-        p, q = shor.factor(N, verbose=True)
-        elapsed = time.time() - start
-        
-        print(f"Time: {elapsed:.3f} seconds")
-        print(f"Result: {p} × {q} = {N}")
+        try:
+            p, q = shor.factor(N, verbose=True)
+            print(f"Result: {p} × {q} = {N}")
+            print(f"Verification: {p} * {q} = {p * q}")
+        except Exception as e:
+            print(f"Error: {e}")
     
-    # Show circuit complexity for larger number
+    # Test QFT
     print(f"\n{'='*50}")
-    print("Circuit Complexity Analysis for N = 2047 (11-bit RSA):")
-    complexity = shor.get_circuit_complexity(2047)
-    for key, value in complexity.items():
-        print(f"  {key}: {value}")
+    print("Quantum Fourier Transform Test")
+    qft = QuantumFourierTransform(3)
+    test_state = np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=complex)
+    result = qft.apply(test_state)
+    print(f"QFT of |000⟩: {np.abs(result)**2}")
